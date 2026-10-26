@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Taskly — Minimal & Premium Task Workspace</title>
+    
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <!-- Canvas Confetti for task completion celebration -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+
+    <!-- Tailwind Config -->
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
+                    },
+                    colors: {
+                        apple: {
+                            light: '#F5F5F7',
+                            dark: '#0D0E12',
+                            cardLight: 'rgba(255, 255, 255, 0.78)',
+                            cardDark: 'rgba(24, 26, 32, 0.75)',
+                        }
+                    },
+                    boxShadow: {
+                        'soft': '0 10px 30px -10px rgba(0, 0, 0, 0.06)',
+                        'soft-dark': '0 10px 30px -10px rgba(0, 0, 0, 0.4)',
+                        'glow': '0 0 20px rgba(99, 102, 241, 0.35)',
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        /* Custom Smooth Animations (Framer Motion Style) */
+        :root {
+            --spring-easing: cubic-bezier(0.22, 1, 0.36, 1);
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* Glassmorphism Utilities */
+        .glass-panel {
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+        }
+
+        /* Framer-style Card Entrance & Hover */
+        .task-card {
+            transition: transform 0.35s var(--spring-easing), 
+                        box-shadow 0.35s var(--spring-easing), 
+                        opacity 0.3s ease,
+                        background-color 0.25s ease;
+            animation: slideUpFade 0.4s var(--spring-easing) forwards;
+        }
+
+        .task-card:hover {
+            transform: translateY(-2px) scale(1.005);
+        }
+
+        .task-card.dragging {
+            opacity: 0.4;
+            transform: scale(0.98);
+            border: 2px dashed #6366f1;
+        }
+
+        @keyframes slideUpFade {
+            from {
+                opacity: 0;
+                transform: translateY(14px) scale(0.98);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+
+        /* Animated Strike-through Effect */
+        .strike-animate {
+            position: relative;
+            transition: color 0.3s ease;
+        }
+
+        .strike-animate::after {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 50%;
+            height: 2px;
+            background: currentColor;
+            width: 0%;
+            transition: width 0.35s var(--spring-easing);
+        }
+
+        .completed-task .strike-animate::after {
+            width: 100%;
+        }
+
+        /* Modal Spring Animation */
+        #taskModal.hidden-modal {
+            opacity: 0;
+            pointer-events: none;
+        }
+        #taskModal.hidden-modal .modal-box {
+            transform: scale(0.92) translateY(20px);
+        }
+        #taskModal.visible-modal {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        #taskModal.visible-modal .modal-box {
+            transform: scale(1) translateY(0);
+        }
+        .modal-box {
+            transition: transform 0.4s var(--spring-easing), opacity 0.3s ease;
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(156, 163, 175, 0.3);
+            border-radius: 9999px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(156, 163, 175, 0.5);
+        }
+    </style>
+</head>
+
+<body class="bg-apple-light dark:bg-apple-dark text-slate-800 dark:text-slate-100 min-h-screen transition-colors duration-300 selection:bg-indigo-500 selection:text-white overflow-x-hidden">
+
+    <!-- Ambient Background Gradients -->
+    <div class="fixed inset-0 pointer-events-none overflow-hidden -z-10">
+        <div class="absolute -top-40 -left-40 w-96 h-96 bg-indigo-400/15 dark:bg-indigo-600/10 rounded-full blur-3xl"></div>
+        <div class="absolute top-1/3 -right-40 w-96 h-96 bg-amber-300/15 dark:bg-purple-600/10 rounded-full blur-3xl"></div>
+        <div class="absolute -bottom-40 left-1/3 w-96 h-96 bg-emerald-400/10 dark:bg-blue-600/10 rounded-full blur-3xl"></div>
+    </div>
+
+    <!-- Top Navigation Header -->
+    <header class="sticky top-0 z-30 glass-panel bg-white/70 dark:bg-[#12141a]/75 border-b border-slate-200/70 dark:border-slate-800/80 transition-colors">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
+            
+            <!-- Left: Mobile Menu & Brand Logo -->
+            <div class="flex items-center gap-3">
+                <button id="mobileMenuBtn" class="lg:hidden p-2 rounded-xl hover:bg-slate-200/60 dark:hover:bg-slate-800 transition" aria-label="Toggle Menu">
+                    <i data-lucide="menu" class="w-5 h-5"></i>
+                </button>
+                <div class="flex items-center gap-2.5">
+                    <div class="w-9 h-9 rounded-2xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center text-white shadow-glow">
+                        <i data-lucide="check-check" class="w-5 h-5"></i>
+                    </div>
+                    <div>
+                        <span class="font-bold text-lg tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-slate-900 to-slate-600 dark:from-white dark:to-slate-400">Taskly</span>
+                        <span id="headerDate" class="hidden sm:inline-block ml-3 text-xs font-medium text-slate-400 dark:text-slate-500 border-l border-slate-300 dark:border-slate-700 pl-3"></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Center: Search Bar -->
+            <div class="flex-1 max-w-md mx-2">
+                <div class="relative">
+                    <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2"></i>
+                    <input 
+                        type="text" 
+                        id="searchInput" 
+                        placeholder="Search tasks, tags, notes... (Press '/')" 
+                        class="w-full pl-10 pr-4 py-2 text-sm rounded-2xl bg-slate-100/90 dark:bg-slate-800/70 border border-transparent focus:border-indigo-500/50 focus:bg-white dark:focus:bg-slate-900 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 transition"
+                    >
+                </div>
+            </div>
+
+            <!-- Right: Streak, Export & Theme Toggle -->
+            <div class="flex items-center gap-2 sm:gap-3">
+                <!-- Streak Pill -->
+                <div title="Daily Completion Streak" class="flex items-center gap-1.5 px-3 py-1.5 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 text-xs font-semibold">
+                    <i data-lucide="flame" class="w-4 h-4 fill-amber-500 text-amber-500"></i>
+                    <span id="streakCount">0</span>
+                    <span class="hidden md:inline">day streak</span>
+                </div>
+
+                <!-- Export Dropdown / Button -->
+                <div class="relative group">
+                    <button id="exportBtn" class="flex items-center gap-1.5 px-3 py-2 rounded-2xl text-xs font-medium bg-slate-100 hover:bg-slate-200/80 dark:bg-slate-800 dark:hover:bg-slate-700/80 text-slate-700 dark:text-slate-200 transition">
+                        <i data-lucide="download" class="w-4 h-4"></i>
+                        <span class="hidden sm:inline">Export</span>
+                    </button>
+                    <!-- Export Menu -->
+                    <div id="exportMenu" class="hidden absolute right-0 mt-2 w-44 rounded-2xl glass-panel bg-white/95 dark:bg-slate-900/95 shadow-xl border border-slate-200/80 dark:border-slate-800 p-1.5 z-50">
+                        <button onclick="exportTasks('json')" class="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-left transition">
+                            <i data-lucide="file-json" class="w-4 h-4 text-indigo-500"></i> Export as JSON
+                        </button>
+                        <button onclick="exportTasks('csv')" class="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-left transition">
+                            <i data-lucide="file-spreadsheet" class="w-4 h-4 text-emerald-500"></i> Export as CSV
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Theme Toggle Button -->
+                <button id="themeToggle" class="p-2.5 rounded-2xl bg-slate-100 hover:bg-slate-200/80 dark:bg-slate-800 dark:hover:bg-slate-700/80 text-slate-700 dark:text-slate-200 transition" aria-label="Toggle Light/Dark Mode">
+                    <i data-lucide="sun" class="w-4 h-4 hidden dark:block text-amber-400"></i>
+                    <i data-lucide="moon" class="w-4 h-4 block dark:hidden text-slate-700"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content Layout -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
+        
+        <!-- Left Sidebar (Filters, Categories, Quote) -->
+        <aside id="sidebar" class="lg:col-span-3 space-y-6 hidden lg:block">
+            
+            <!-- Status Filters Card -->
+            <div class="glass-panel bg-apple-cardLight dark:bg-apple-cardDark rounded-2xl p-4 border border-white/60 dark:border-slate-800/80 shadow-soft dark:shadow-soft-dark">
+                <p class="text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 px-3 mb-2">Views</p>
+                <nav class="space-y-1" id="statusFilters">
+                    <button data-filter="all" class="filter-btn active-filter w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium transition">
+                        <span class="flex items-center gap-2.5">
+                            <i data-lucide="layers" class="w-4 h-4 text-indigo-500"></i> All Tasks
+                        </span>
+                        <span id="count-all" class="text-xs px-2 py-0.5 rounded-full bg-slate-200/70 dark:bg-slate-800">0</span>
+                    </button>
+                    <button data-filter="today" class="filter-btn w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium transition">
+                        <span class="flex items-center gap-2.5">
+                            <i data-lucide="calendar-check-2" class="w-4 h-4 text-amber-500"></i> Today
+                        </span>
+                        <span id="count-today" class="text-xs px-2 py-0.5 rounded-full bg-slate-200/70 dark:bg-slate-800">0</span>
+                    </button>
+                    <button data-filter="pending" class="filter-btn w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium transition">
+                        <span class="flex items-center gap-2.5">
+                            <i data-lucide="clock" class="w-4 h-4 text-sky-500"></i> Pending
+                        </span>
+                        <span id="count-pending" class="text-xs px-2 py-0.5 rounded-full bg-slate-200/70 dark:bg-slate-800">0</span>
+                    </button>
+                    <button data-filter="completed" class="filter-btn w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium transition">
+                        <span class="flex items-center gap-2.5">
+                            <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-500"></i> Completed
+                        </span>
+                        <span id="count-completed" class="text-xs px-2 py-0.5 rounded-full bg-slate-200/70 dark:bg-slate-800">0</span>
+                    </button>
+                </nav>
+
+                <hr class="my-4 border-slate-200/60 dark:border-slate-800">
+
+                <!-- Category Filters -->
+                <p class="text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 px-3 mb-2">Categories</p>
+                <nav class="space-y-1" id="categoryFilters">
+                    <button data-category="all" class="cat-btn active-cat w-full flex items-center justify-between px-3 py-2 rounded-xl text-sm font-medium transition">
+                        <span class="flex items-center gap-2.5">
+                            <span class="w-2.5 h-2.5 rounded-full bg-slate-400"></span> All Categories
+                        </span>
+                    </button>
+                    <button data-category="Work" class="cat-btn w-full flex items-center justify-between px-3 py-2 rounded-xl text-sm font-medium transition">
+                        <span class="flex items-center gap-2.5">
+                            <span class="w-2.5 h-2.5 rounded-full bg-blue-500"></span> Work
+                        </span>
+                        <span id="cat-Work" class="text-xs text-slate-400">0</span>
+                    </button>
+                    <button data-category="Personal" class="cat-btn w-full flex items-center justify-between px-3 py-2 rounded-xl text-sm font-medium transition">
+                        <span class="flex items-center gap-2.5">
+                            <span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span> Personal
+                        </span>
+                        <span id="cat-Personal" class="text-xs text-slate-400">0</span>
+                    </button>
+                    <button data-category="Study" class="cat-btn w-full flex items-center justify-between px-3 py-2 rounded-xl text-sm font-medium transition">
+                        <span class="flex items-center gap-2.5">
+                            <span class="w-2.5 h-2.5 rounded-full bg-purple-500"></span> Study
+                        </span>
+                        <span id="cat-Study" class="text-xs text-slate-400">0</span>
+                    </button>
+                    <button data-category="Urgent" class="cat-btn w-full flex items-center justify-between px-3 py-2 rounded-xl text-sm font-medium transition">
+                        <span class="flex items-center gap-2.5">
+                            <span class="w-2.5 h-2.5 rounded-full bg-rose-500"></span> Urgent
+                        </span>
+                        <span id="cat-Urgent" class="text-xs text-slate-400">0</span>
+                    </button>
+                </nav>
+            </div>
+
+            <!-- Motivational Quote Card (Notion / Apple Widget Vibe) -->
+            <div class="glass-panel bg-gradient-to-br from-indigo-500/10 via-purple-500/5 to-transparent dark:from-indigo-500/15 dark:via-slate-900/60 rounded-2xl p-5 border border-indigo-500/20 shadow-soft dark:shadow-soft-dark">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-[11px] font-semibold uppercase tracking-wider text-indigo-500 dark:text-indigo-400 flex items-center gap-1.5">
+                        <i data-lucide="sparkles" class="w-3.5 h-3.5"></i> Daily Focus
+                    </span>
+                    <button id="newQuoteBtn" class="text-slate-400 hover:text-indigo-500 transition" title="New Quote">
+                        <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+                    </button>
+                </div>
+                <p id="quoteText" class="text-xs sm:text-sm italic text-slate-700 dark:text-slate-300 leading-relaxed">
+                    "Simplicity boils down to two steps: Identify the essential. Eliminate the rest."
+                </p>
+                <p id="quoteAuthor" class="text-[11px] font-medium text-slate-400 dark:text-slate-500 mt-2">— Leo Babauta</p>
+            </div>
+        </aside>
+
+        <!-- Main Center Workspace -->
+        <main class="lg:col-span-9 space-y-6">
+            
+            <!-- Daily Progress Banner Card -->
+            <section class="glass-panel bg-apple-cardLight dark:bg-apple-cardDark rounded-2xl p-5 sm:p-6 border border-white/60 dark:border-slate-800/80 shadow-soft dark:shadow-soft-dark">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+                    <div>
+                        <h1 id="currentViewTitle" class="text-xl sm:text-2xl font-bold tracking-tight">All Tasks</h1>
+                        <p id="progressSubtext" class="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-0.5">Keep your momentum going today.</p>
+                    </div>
+                    <div class="flex items-center gap-3 self-start sm:self-center">
+                        <div class="text-right">
+                            <span id="progressPercentage" class="text-2xl font-bold text-indigo-600 dark:text-indigo-400">0%</span>
+                            <p class="text-[11px] text-slate-400 uppercase tracking-wider">Completed</p>
+                        </div>
+                        <button onclick="openModal()" class="hidden sm:flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium px-4 py-2.5 rounded-2xl shadow-glow transition transform active:scale-95">
+                            <i data-lucide="plus" class="w-4 h-4"></i> New Task
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Smooth Progress Bar -->
+                <div class="w-full h-2.5 bg-slate-200/80 dark:bg-slate-800 rounded-full overflow-hidden">
+                    <div id="progressBar" class="h-full bg-gradient-to-r from-indigo-500 via-purple-500 to-emerald-400 rounded-full transition-all duration-500 ease-out" style="width: 0%"></div>
+                </div>
+            </section>
+
+            <!-- Sort & Quick Controls Bar -->
+            <div class="flex flex-wrap items-center justify-between gap-3 px-1">
+                <div class="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                    <i data-lucide="grip-vertical" class="w-4 h-4 text-slate-400"></i>
+                    <span>Drag cards to reorder priority</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <select id="priorityFilter" class="text-xs rounded-xl px-3 py-1.5 bg-white/80 dark:bg-slate-800/90 border border-slate-200/80 dark:border-slate-700 focus:outline-none focus:border-indigo-500">
+                        <option value="all">All Priorities</option>
+                        <option value="High">🔴 High Priority</option>
+                        <option value="Medium">🟡 Medium Priority</option>
+                        <option value="Low">🟢 Low Priority</option>
+                    </se
